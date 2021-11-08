@@ -20,4 +20,53 @@ while True:
 
 print(f"Pinger {pid} done", file=sys.stderr)
 
-def write():
+
+state = {
+    "term" : 0,
+    "state" = "FOLLOWER",
+    "leader" = -1,
+    "commit_index" = 0
+}
+logs = []
+def write(request_type, receiver_id, msg):
+
+    if request_type == 1:
+        print("SEND " + str(receiver_id) + " RequestVote " + str(msg) + " " + state[term])
+    if request_type == 2:
+        print("SEND " + str(receiver_id) + " Vote " + str(msg) + " " + state[term])
+    if request_type == 3:
+        print("SEND " + str(receiver_id) + " Heartbeat " + str(msg) + " " + state[term])
+
+
+def update_state(state_var, new_value):
+    if state_var == 1:
+        #term
+        if state["term"] != new_value:
+            print("STATE term=" + new_value)
+            state["term"] = new_value
+
+    if state_var == 2:
+        #state  
+        if state["state"] != new_value:
+            print("STATE state=" + new_value)
+            state["state"] = new_value
+        
+    if state_var == 3:
+        #leader  
+        if state["leader"] != new_value:
+            print("STATE leader=" + new_value)
+            state["leader"] = new_value
+
+    if state_var == 4:
+        #log  
+        if log != new_value:
+            print("STATE log[" + commit_index + "]=" + new_value) #not sure if index should be commit index, but I think so
+            state["log"] = new_value
+
+    if state_var == 5:
+        #commit_index   
+        if state["commit_index"] != new_value:
+            print("STATE commit_index=" + new_value)
+            state["commit_index"] = new_value    
+
+    
