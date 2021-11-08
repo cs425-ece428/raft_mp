@@ -6,17 +6,33 @@ n = int(sys.argv[2])
 last = None
 print(f"Starting pinger {pid}", file=sys.stderr)
 
+import random
+TIMEOUT = random.randint(1, 9)
 
-def reader():
+def timeout():
+    pass
+
+def parse_message(message: str):
+    , sender_id, action, args = message.split(" ", 3)
+    return sender_id, message, args
+
+def reader(message: str):
+    sender_id, message, args = parse_message(message)
+    if message == "RequestVote":
+        print("received request vote")
+    if message == "Vote":
+        print("received a vote")
+    if message == "Heartbeat":
+        print ("received a heartbeat")
 
 
 while True:
-    print(f"SEND {(pid+1)%n} PING {pid}", flush=True)
+    # print(f"SEND {(pid+1)%n} PING {pid}", flush=True)
     line = sys.stdin.readline()
-    if line is None:
-        break
-    print(f"Got {line.strip()}", file=sys.stderr)
-    time.sleep(2)
+    if line is not None:
+        reader(line.strip())
+    # print(f"Got {line.strip()}", file=sys.stderr)
+    # time.sleep(2)
 
 print(f"Pinger {pid} done", file=sys.stderr)
 
