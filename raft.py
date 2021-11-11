@@ -19,10 +19,14 @@ print_dict = {
     COMMIT_INDEX: "commitIndex"
 }
 
+L = "\"LEADER\""
+C = "\"CANDIDATE\""
+F = "\"FOLLOWER\""
+
 state = {
     TERM : 0,
-    STATE : "FOLLOWER",
-    LEADER : -1,
+    STATE : F,
+    LEADER : "null",
     # LOG = [],
     COMMIT_INDEX : 0,
 }
@@ -38,7 +42,7 @@ import random
 from _thread import *
 import threading
 
-ELECTION_START_TIMEOUT = random.uniform(1, 3)
+ELECTION_START_TIMEOUT = my_id + 1
 HEARTBEAT_TIMEOUT = 0.4
 
 last_heard_time_mutex = threading.Lock()
@@ -75,13 +79,11 @@ def UpdateLastHeartBeatTime():
 
 def timeout():
     while True:
-        if time.time() - GetLastHeardTime() > ELECTION_START_TIMEOUT and get_state(STATE) != "LEADER":
-            print(GetLastHeardTime())
-            print(time.time())
+        if time.time() - GetLastHeardTime() > ELECTION_START_TIMEOUT and get_state(STATE) != L:
             start_election()
             UpdateLastHeardTime()
             
-        elif time.time() - GetLastHeartBeatTime() > HEARTBEAT_TIMEOUT and get_state(STATE) == "LEADER":
+        elif time.time() - GetLastHeartBeatTime() > HEARTBEAT_TIMEOUT and get_state(STATE) == L:
             send_message_to_all(HEARTBEAT)
 
 ############# TIMEOUT MODULE  END #################
@@ -92,7 +94,7 @@ def start_election():
     update_state(TERM, current_term + 1)
 
     # update state to candidate
-    update_state(STATE, "CANDIDATE")
+    update_state(STATE, C)
 
     # vote for yourself
     current_votes_mutex.acquire()
@@ -115,23 +117,23 @@ def send_message_to_all(message_type):
 
 def parse_message(message: str):
     sentinel, sender_id, action, args = message.split(" ", 3)
-    return sender_id, message, args
+    return sender_id, action, args
 
 
-def handle_request_vote(message_term):
+def handle_request_vote(message_term: int, sender_id: str):
     if message_term > get_state(TERM):
         # only vote if have not voted for this term 
         # (only higher terms, no need for lower terms b/c irrelevant)
-        write(VOTE, sender_id, "True") # send a True vote message to sender
         update_state(TERM, message_term)
+        write(VOTE, sender_id, "True") # send a True vote message to sender
     
     elif message_term <= get_state(TERM):
         write(VOTE, sender_id, "False")
 
 
-def handle_vote(decision, message_term):
+def handle_vote(message_term: int, decision: str):
     # if somehow state changed from candidate to follower/leader in between sending/receiving, ignore the vote
-    if get_state(STATE) == "CANDIDATE" and decision == "True":
+    if get_state(STATE) == C and decision == "True" and get_state(TERM) == message_term:
 
         current_votes_mutex.acquire()
         global current_votes
@@ -141,18 +143,18 @@ def handle_vote(decision, message_term):
     
         if current_votes_local > n/2:
             # become leader since we got majority of votes
-            update_state(STATE, "LEADER") #change state to leader
-            update_state(LEADER, my_id) #set leader to itself
+            update_state(STATE, L) # change state to leader
+            update_state(LEADER, my_id) # set leader to itself
 
             # let other processes know we are the leader
             send_message_to_all(HEARTBEAT)
 
 
-def handle_heartbeat(message_term):
-    if get_state(STATE) != "LEADER":
-        update_state(STATE, "FOLLOWER") #make itself follower if not already set
-        update_state(LEADER, sender_id) #make sender the leader if not already set
-        update_state(TERM, message_term) #update term to whatever was sent in message 
+def handle_heartbeat(message_term: int, sender_id: str):
+    if get_state(STATE) != L:
+        update_state(STATE, F) # make itself follower if not already set
+        update_state(TERM, message_term) # update term to whatever was sent in message 
+        update_state(LEADER, sender_id) # make sender the leader if not already set
         write(HEARTBEAT, sender_id)        
 
 
@@ -160,21 +162,26 @@ def reader(message: str):
     # Update the last time when we received anything
     UpdateLastHeardTime()
 
-    sender_id, message, args = parse_message(message)
+    # print("received something")
+
+
+    sender_id, action, args = parse_message(message)
     message_term = args.split(" ")[-1]
+    if message_term:
+        message_term = int(message_term)
 
-    if message == "RequestVote":
-        print("received request vote")
-        handle_request_vote(message_term)
+    if action == "RequestVote":
+        # print("received request vote")
+        handle_request_vote(message_term, sender_id)
 
-    if message == "Vote":
-        print("received a vote")
+    if action == "Vote":
+        # print("received a vote")
         decision = args.split(" ")[-2] 
-        handle_vote(decision)
+        handle_vote(message_term, decision)
 
-    if message == "Heartbeat":
-        print ("received a heartbeat")
-        handle_heartbeat(message_term)
+    if action == "Heartbeat":
+        # print ("received a heartbeat")
+        handle_heartbeat(message_term, sender_id)
 
 
 def write(request_type, receiver_id, msg = ""):
@@ -196,8 +203,11 @@ def update_state(state_var, new_value):
     state_mutex.acquire()
     global state
     if state[state_var] != new_value:
-        print("STATE " + print_dict[state_var] + "=" + str(new_value))
+        if state_var == TERM:
+            state[LEADER] = "null"
+            print("STATE " + print_dict[LEADER] + "=null")
         state[state_var] = new_value
+        print("STATE " + print_dict[state_var] + "=" + str(new_value))
 
     # if state_var == 4:
     #     #log  
@@ -211,7 +221,7 @@ def update_state(state_var, new_value):
 
 start_new_thread(timeout, ())
 
-print("STARTING RAFT on node " + str(my_id) + "\n")
+# print("STARTING RAFT on node " + str(my_id) + "\n")
 
 while True:
     line = sys.stdin.readline()
