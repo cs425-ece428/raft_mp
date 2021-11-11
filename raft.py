@@ -42,8 +42,8 @@ import random
 from _thread import *
 import threading
 
-ELECTION_START_TIMEOUT = my_id + 1
-HEARTBEAT_TIMEOUT = 0.4
+ELECTION_START_TIMEOUT = 0.25 + my_id/5 + random.random()/10
+HEARTBEAT_TIMEOUT = 0.1
 
 last_heard_time_mutex = threading.Lock()
 last_heart_beat_time_mutex = threading.Lock()
@@ -100,7 +100,18 @@ def start_election():
     current_votes_mutex.acquire()
     global current_votes
     current_votes = 1
+    current_votes_local = current_votes
     current_votes_mutex.release()  
+
+    if current_votes_local > n/2:
+        # become leader since we got majority of votes
+        update_state(STATE, L) # change state to leader
+        update_state(LEADER, my_id) # set leader to itself
+
+        # let other processes know we are the leader
+        send_message_to_all(HEARTBEAT)
+
+        return
 
     # send request vote to all
     send_message_to_all(REQUEST_VOTE)
@@ -151,7 +162,7 @@ def handle_vote(message_term: int, decision: str):
 
 
 def handle_heartbeat(message_term: int, sender_id: str):
-    if get_state(STATE) != L:
+    if (get_state(STATE) != L and message_term == get_state(TERM)) or message_term > get_state(TERM):
         update_state(STATE, F) # make itself follower if not already set
         update_state(TERM, message_term) # update term to whatever was sent in message 
         update_state(LEADER, sender_id) # make sender the leader if not already set
