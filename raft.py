@@ -9,7 +9,9 @@ COMMIT_INDEX = 5
 
 REQUEST_VOTE = 1
 VOTE = 2
-HEARTBEAT = 3
+APPEND_ENTRIES = 3
+APPEND_ENTRIES_RESPONSE = 4
+
 
 print_dict = {
     TERM: "term",
@@ -27,11 +29,12 @@ state = {
     TERM : 0,
     STATE : F,
     LEADER : "null",
-    # LOG = [],
+    LOG : [],
     COMMIT_INDEX : 0,
 }
 
 current_votes = 0
+uncommited_log = []
 
 my_id = int(sys.argv[1])
 n = int(sys.argv[2])
@@ -84,7 +87,8 @@ def timeout():
             UpdateLastHeardTime()
             
         elif time.time() - GetLastHeartBeatTime() > HEARTBEAT_TIMEOUT and get_state(STATE) == L:
-            send_message_to_all(HEARTBEAT)
+            # send_message_to_all(HEARTBEAT)
+            send_message_to_all(APPEND_ENTRIES)
 
 ############# TIMEOUT MODULE  END #################
 
@@ -109,7 +113,8 @@ def start_election():
         update_state(LEADER, my_id) # set leader to itself
 
         # let other processes know we are the leader
-        send_message_to_all(HEARTBEAT)
+        # send_message_to_all(HEARTBEAT)
+        send_message_to_all(APPEND_ENTRIES)
 
         return
 
@@ -117,13 +122,13 @@ def start_election():
     send_message_to_all(REQUEST_VOTE)
 
 
-def send_message_to_all(message_type):
-    if message_type == HEARTBEAT:
+def send_message_to_all(message_type, msg = ""):
+    if message_type == APPEND_ENTRIES:
         UpdateLastHeartBeatTime()
 
     for i in range(n):
         if i != my_id: # no need to send heartbeat to self
-            write(message_type, int(i))
+            write(message_type, int(i), msg)
 
 
 def parse_message(message: str):
@@ -158,15 +163,33 @@ def handle_vote(message_term: int, decision: str):
             update_state(LEADER, my_id) # set leader to itself
 
             # let other processes know we are the leader
-            send_message_to_all(HEARTBEAT)
+            # send_message_to_all(HEARTBEAT)
+            send_message_to_all(APPEND_ENTRIES)
 
 
-def handle_heartbeat(message_term: int, sender_id: str):
+
+def handle_heartbeat(message_term: int, sender_id: str, log_message: str):
     if (get_state(STATE) != L and message_term == get_state(TERM)) or message_term > get_state(TERM):
         update_state(STATE, F) # make itself follower if not already set
         update_state(TERM, message_term) # update term to whatever was sent in message 
         update_state(LEADER, sender_id) # make sender the leader if not already set
-        write(HEARTBEAT, sender_id)        
+        write(APPEND_ENTRIES_RESPONSE, sender_id, log_message)    
+
+def handle_heartbeat_response(message_term: int, sender_id: str):
+    if get_state(STATE) == L:
+        pass
+
+        #need to keep track of responses from followers
+        #majority responses will tell it to commit message
+
+
+
+def handle_log(log_message):
+    if get_state(STATE) == L:
+        #only leader should get log
+        send_message_to_all(APPEND_ENTRIES, log_message)
+        
+
 
 
 def reader(message: str):
@@ -174,6 +197,12 @@ def reader(message: str):
     UpdateLastHeardTime()
 
     # print("received something")
+
+    if message.split(' ')[0] == 'LOG':
+        print(message)
+        log_message = message.split(' ')[1]
+        handle_log(log_message)
+        return
 
 
     sender_id, action, args = parse_message(message)
@@ -190,9 +219,17 @@ def reader(message: str):
         decision = args.split(" ")[-2] 
         handle_vote(message_term, decision)
 
-    if action == "Heartbeat":
+    if action == "AppendEntries":
         # print ("received a heartbeat")
-        handle_heartbeat(message_term, sender_id)
+        log_message = args.split(" ")[-2] 
+        handle_heartbeat(message_term, sender_id, log_message)
+
+    if action == "AppendEntriesResponse":
+        # print ("received a heartbeat")
+        handle_heartbeat_response(message_term, sender_id)
+    else:
+    # if action == "LOG":
+        print("SEND message is: " + message)
 
 
 def write(request_type, receiver_id, msg = ""):
@@ -200,9 +237,10 @@ def write(request_type, receiver_id, msg = ""):
         print("SEND " + str(receiver_id) + " RequestVote " + str(msg) + " " + str(get_state(TERM)))
     if request_type == VOTE:
         print("SEND " + str(receiver_id) + " Vote " + str(msg) + " " + str(get_state(TERM)))
-    if request_type == HEARTBEAT:
-        print("SEND " + str(receiver_id) + " Heartbeat " + str(msg) + " " + str(get_state(TERM)))
-
+    if request_type == APPEND_ENTRIES:
+        print("SEND " + str(receiver_id) + " AppendEntries " + str(get_state(COMMIT_INDEX)) + " " + str(msg) + " " + str(get_state(TERM)))
+    if request_type == APPEND_ENTRIES_RESPONSE:
+        print("SEND " + str(receiver_id) + " AppendEntriesResponse " + str(get_state(COMMIT_INDEX)) + " " + str(msg) + " " + str(get_state(TERM)))
 
 def get_state(state_var):
     state_mutex.acquire()
