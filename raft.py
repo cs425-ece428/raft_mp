@@ -227,9 +227,7 @@ def reader(message: str):
     if action == "AppendEntriesResponse":
         # print ("received a heartbeat")
         handle_heartbeat_response(message_term, sender_id)
-    else:
-    # if action == "LOG":
-        print("SEND message is: " + message)
+
 
 
 def write(request_type, receiver_id, msg = ""):
