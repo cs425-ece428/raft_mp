@@ -21,7 +21,7 @@ async def main(n: int, group: raft_test.RaftGroup):
 
     for entry in entries:
         group.processes[leader].log_entry(entry)
-        asyncio.sleep(0.5)
+        await asyncio.sleep(0.5)
 
     def leader_committed(group):
         return group.commitIndex[leader] == NENTRIES
@@ -43,7 +43,7 @@ async def main(n: int, group: raft_test.RaftGroup):
 
     for entry in entries2:
         group.processes[leader].log_entry(entry)
-        asyncio.sleep(0.5)
+        await asyncio.sleep(0.5)
 
     def all_committed(group):
         return all(group.commitIndex[pid] == NENTRIES*2 for pid in map(str,range(n)) if pid not in followers_to_kill)
