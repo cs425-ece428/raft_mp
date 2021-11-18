@@ -200,7 +200,7 @@ def reader(message: str):
 
     if message.split(' ')[0] == 'LOG':
         print(message)
-        log_message = message.split(' ')[1]
+        log_message = "\"" + message.split(' ')[1] + "\"" 
         handle_log(log_message)
         return
 
