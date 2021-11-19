@@ -298,28 +298,37 @@ def reader(message: str):
         return
 
     sender_id, action, args = parse_message(message)
-    message_term = args.split(" ")[-1]
-    if message_term:
-        message_term = int(message_term)
+
+    sender_id = int(sender_id)
+    args_split = args.split(" ")
 
     if action == "RequestVote":
         # print("received request vote")
+        message_term, candidate_last_log_index, candidate_last_log_term = map(int, args_split)
 
-        handle_request_vote(message_term, sender_id)
+        handle_request_vote(sender_id, message_term, candidate_last_log_index, candidate_last_log_term)
 
     if action == "Vote":
         # print("received a vote")
-        decision = args.split(" ")[-2] 
+        message_term = int(args_split[0])
+        decision = args_split[1] 
+
         handle_vote(message_term, decision)
 
     if action == "AppendEntries":
         # print ("received a appendentries")
-        log_message = args.split(" ")[-2] 
-        handle_appendentries(message_term, sender_id, log_message)
+        message_term, prev_log_term, prev_log_index, commit_index = map(int, args_split[:-1])
+        log_message = args_split[-1]
+
+        handle_appendentries(sender_id, message_term, prev_log_term, prev_log_index, commit_index, log_message)
 
     if action == "AppendEntriesResponse":
         # print ("received a appendentries response")
-        handle_appendentries_response(message_term, sender_id)
+        message_term = int(args_split[0])
+        success = bool(int(args_split[1])) # "0" -> 0 -> False
+        match_index = int(args_split[2])
+
+        handle_appendentries_response(sender_id, message_term, success, match_index)
 
 
 
