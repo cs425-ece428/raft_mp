@@ -317,10 +317,10 @@ def reader(message: str):
 
     if action == "AppendEntries":
         # print ("received a appendentries")
-        message_term, prev_log_term, prev_log_index, commit_index = map(int, args_split[:-1])
+        message_term, prev_log_index, prev_log_term, commit_index = map(int, args_split[:-1])
         log_message = args_split[-1]
 
-        handle_appendentries(sender_id, message_term, prev_log_term, prev_log_index, commit_index, log_message)
+        handle_appendentries(sender_id, message_term, prev_log_index, prev_log_term, commit_index, log_message)
 
     if action == "AppendEntriesResponse":
         # print ("received a appendentries response")
