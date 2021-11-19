@@ -138,23 +138,25 @@ def parse_message(message: str):
     return sender_id, action, args
 
 def check_and_commit():
+    logs = get_state(LOG)
     commit_index = get_state(COMMIT_INDEX)
+    current_term = get_state(TERM)
 
+    next_index = len(logs)
     commit_votes = 0
-    for i in range (1, n):
-        if i != my_id:
-            match_index = peer_state[i]["match_index"]
-            if match_index > commit_index:
-                commit_votes += 1
 
-    if commit_votes > n/2:
-        logs = get_state(LOG)
-        current_term = get_state(TERM)
-        if current_term == logs[commit_index + 1][0]:
-            commit_index += 1
-            update_state(COMMIT_INDEX, commit_index + 1)
-            # TODO: check if we can commit messages in our current term
-            # TODO: print that we committed the message
+    for index in range (commit_index + 1, next_index):
+
+        # Can only commit messages logged in our term
+        if logs[index][0] == current_term:
+            for i in range (0, n):
+                peer_match_index = peer_state[i]["match_index"]
+                if peer_match_index >= index:
+                    commit_votes += 1
+
+            if commit_votes > n/2:
+                update_state(COMMIT_INDEX, index)
+                send_message_to_all(APPEND_ENTRIES)
 
 
 def handle_request_vote(message_term: int, sender_id: str):
@@ -247,8 +249,7 @@ def handle_appendentries_response(
             if match_index < len(get_state(LOG)):
                 write(APPEND_ENTRIES, sender_id)
 
-            # Check if we can commit anything
-            # If yes, commit and send an Appendentry to all with an incremented commit index
+            # Check if we can commit anything. If yes, commit and send appendentries to all
             check_and_commit()
         else:
             peer_state[sender_id]["next_index"] -= 1
