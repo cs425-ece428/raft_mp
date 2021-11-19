@@ -365,17 +365,17 @@ def update_state(state_var, new_value):
 
         # appending value to leader's log
         if state[STATE] == L:
+            print("STATE log[" + str(len(log)) + "]=" + new_value) 
             log.append(new_value)
-            print("STATE log[" + str(len(log)-1) + "]=" + new_value) 
 
         # appending value to follower
-        elif len(log) >= match_index:
-            print("STATE log[" + match_index + "]=" + new_value) 
+        elif len(log) <= match_index:
+            print("STATE log[" + str(len(log)) + "]=" + new_value) 
             log.append(new_value)
 
         # overwriting value to follower
         elif log[match_index] != new_value:
-            print("STATE log[" + match_index + "]=" + new_value) 
+            print("STATE log[" + str(match_index) + "]=" + new_value) 
             log[match_index] = new_value
 
         state[LOG] = log
