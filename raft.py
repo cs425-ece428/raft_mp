@@ -185,20 +185,31 @@ def handle_appendentries(
     log_message: str,
     commit_index: int,
     ):
+    global match_index
     if (get_state(STATE) != L and message_term == get_state(TERM)) or message_term > get_state(TERM):
         update_state(STATE, F) # make itself follower if not already set
         update_state(TERM, message_term) # update term to whatever was sent in message 
         update_state(LEADER, sender_id) # make sender the leader if not already set
 
         if log_message is not "":
-            # TODO: calculate success by checking if prev log term and index is in our logs
-            success = False
+            # calculate success by checking if prev log term and index is in our logs
+            local_log = get_state(LOG)
+            if len(local_log) > prev_log_index and local_log[prev_log_index][0] == prev_log_term:
+                success = True
+            else:
+                success = False
 
             if success:
-                # TODO: add/overwrite the entry to our logs
-                # TODO: update the STATE of logs
-                # TODO: increment the match index
-                # TODO: increment our commit index as long as our match index < leader's commit index
+                # add/overwrite the entry to our logs
+                new_entry = (message_term, log_message) # will add this tuple to logs (term, log_message)
+                # update the STATE of logs
+                update_state(LOG, new_entry)
+                # TODO: update the update_state function for LOG
+                # increment the match index
+                match_index += 1
+                # increment our commit index as long as our match index < leader's commit index
+                if match_index <= commit_index:
+                    update_state(COMMIT_INDEX, match_index)
 
         write(APPEND_ENTRIES_RESPONSE, sender_id, success)    
 
