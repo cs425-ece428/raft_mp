@@ -113,6 +113,11 @@ def start_election():
         # become leader since we got majority of votes
         update_state(STATE, L) # change state to leader
         update_state(LEADER, my_id) # set leader to itself
+        for i in range(1, n):
+            peer_state.append({
+                "next_index": len(get_state(LOG)) + 1,
+                "match_index": 0
+            })
 
         # let other processes know we are the leader
         # send_message_to_all(HEARTBEAT)
@@ -276,8 +281,10 @@ def handle_log(log_message : str):
     # only leader should get log
     if get_state(STATE) == L:
         update_state(LOG, log_message)
+        logs = get_state(logs)
+        peer_state[my_id]["match_index"] = len(logs) - 1
+        peer_state[my_id]["next_index"] = len(logs)
         send_message_to_all(APPEND_ENTRIES)
-        pass
 
 
 def reader(message: str):
