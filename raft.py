@@ -29,11 +29,11 @@ state = {
     TERM : 0,
     STATE : F,
     LEADER : "null",
-    LOG : [],
+    LOG : [(0, "")],
     COMMIT_INDEX : 0,
 }
 
-match_index = 0
+our_match_index = 0
 peer_state = []
 
 current_votes = 0
@@ -137,13 +137,33 @@ def parse_message(message: str):
     sentinel, sender_id, action, args = message.split(" ", 3)
     return sender_id, action, args
 
+def check_and_commit():
+    commit_index = get_state(COMMIT_INDEX)
+
+    commit_votes = 0
+    for i in range (1, n):
+        if i != my_id:
+            match_index = peer_state[i]["match_index"]
+            if match_index > commit_index:
+                commit_votes += 1
+
+    if commit_votes > n/2:
+        logs = get_state(LOG)
+        current_term = get_state(TERM)
+        if current_term == logs[commit_index + 1][0]:
+            commit_index += 1
+            update_state(COMMIT_INDEX, commit_index + 1)
+            # TODO: check if we can commit messages in our current term
+            # TODO: print that we committed the message
+
 
 def handle_request_vote(message_term: int, sender_id: str):
-    # TODO: add the voting conditions
     if message_term > get_state(TERM):
         # only vote if have not voted for this term 
         # (only higher terms, no need for lower terms b/c irrelevant)
         update_state(TERM, message_term)
+    
+        # TODO: add the voting conditions
         write(VOTE, sender_id, "True") # send a True vote message to sender
     
     elif message_term <= get_state(TERM):
@@ -166,8 +186,8 @@ def handle_vote(message_term: int, decision: str):
             update_state(LEADER, my_id) # set leader to itself
             for i in range(1, n):
                 peer_state.append({
-                    next_index: len(get_state(LOG) + 1),
-                    match_index: 0
+                    "next_index": len(get_state(LOG)) + 1,
+                    "match_index": 0
                 })
                     
 
@@ -215,18 +235,24 @@ def handle_appendentries(
 
 def handle_appendentries_response(
     message_term: int, 
-    sender_id: str, 
+    sender_id: int, 
     success: bool, 
     match_index: int
     ):
     if get_state(STATE) == L:
-        # TODO: Check success 
-        # If not, decrement prev log index and prev log term and send appenentry again
-        # TODO: If success is true, check the match index, 
-        # If not equal to leader's prev index, send an appendentry with the next log
-        # TODO: If success is true, check if we can commit anything
-        # TODO: If we can, commit a message and send an Append entry to all with an updated commit index
-        pass
+        if success:
+            # If match_index is less than our next index, send an appendentry with the next log
+            peer_state[sender_id]["match_index"] = match_index
+            peer_state[sender_id]["next_index"] = match_index + 1
+            if match_index < len(get_state(LOG)):
+                write(APPEND_ENTRIES, sender_id)
+
+            # Check if we can commit anything
+            # If yes, commit and send an Appendentry to all with an incremented commit index
+            check_and_commit()
+        else:
+            peer_state[sender_id]["next_index"] -= 1
+            write(APPEND_ENTRIES, sender_id)
 
 
 def handle_log(log_message):
