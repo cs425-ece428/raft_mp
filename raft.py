@@ -240,11 +240,10 @@ def handle_appendentries(
 
             if success:
                 # add/overwrite the entry to our logs
-                new_entry = (message_term, log_message) # will add this tuple to logs (term, log_message)
                 # increment the match index
                 my_match_index = prev_log_index + 1
                 # update the STATE of logs
-                update_state(LOG, new_entry)
+                update_state(LOG, log_message)
                 # TODO: update the update_state function for LOG
                 # increment our commit index as long as our match index < leader's commit index
                 if my_match_index <= commit_index:
@@ -392,20 +391,21 @@ def update_state(state_var, new_value):
 
     elif state_var == LOG:
         log = state[LOG]
+        new_value = (state[TERM], new_value)
 
         # appending value to leader's log
         if state[STATE] == L:
-            print("STATE log[" + str(len(log)) + "]=" + new_value) 
+            print("STATE log[" + str(len(log)) + "]=" + str(new_value)) 
             log.append(new_value)
 
         # appending value to follower
         elif len(log) <= match_index:
-            print("STATE log[" + str(len(log)) + "]=" + new_value) 
+            print("STATE log[" + str(len(log)) + "]=" + str(new_value)) 
             log.append(new_value)
 
         # overwriting value to follower
         elif log[match_index] != new_value:
-            print("STATE log[" + str(match_index) + "]=" + new_value) 
+            print("STATE log[" + str(match_index) + "]=" + str(new_value)) 
             log[match_index] = new_value
 
         state[LOG] = log
