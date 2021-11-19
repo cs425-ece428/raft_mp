@@ -121,7 +121,11 @@ def start_election():
         return
 
     # send request vote to all
-    send_message_to_all(REQUEST_VOTE)
+    logs = get_state(logs)
+    last_log_index = len(logs) - 1
+    last_log_term = logs[-1][0]
+    message = str(last_log_index) + " " + str(last_log_term)
+    send_message_to_all(REQUEST_VOTE, message)
 
 
 def send_message_to_all(message_type, msg = ""):
@@ -159,14 +163,28 @@ def check_and_commit():
                 send_message_to_all(APPEND_ENTRIES)
 
 
-def handle_request_vote(message_term: int, sender_id: str):
+def handle_request_vote(
+    message_term: int, 
+    sender_id: int, 
+    candidate_last_log_index: int, 
+    candidate_last_log_term: int
+    ):
     if message_term > get_state(TERM):
         # only vote if have not voted for this term 
         # (only higher terms, no need for lower terms b/c irrelevant)
         update_state(TERM, message_term)
     
-        # TODO: add the voting conditions
-        write(VOTE, sender_id, "True") # send a True vote message to sender
+        my_logs = get_state(LOG)
+        my_last_log_term = my_logs[-1][0]
+        my_last_log_index = len(my_logs)
+
+        # Send a vote only if the candidate's logs are more complete
+        if my_last_log_term < candidate_last_log_term 
+            or (my_last_log_term == candidate_last_log_term 
+                and my_last_log_index <= candidate_last_log_index):
+            write(VOTE, sender_id, "True") 
+        elif:
+            write(VOTE, sender_id, "False")
     
     elif message_term <= get_state(TERM):
         write(VOTE, sender_id, "False")
