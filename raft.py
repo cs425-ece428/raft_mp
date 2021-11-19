@@ -375,7 +375,7 @@ def get_state(state_var):
 def update_state(state_var, new_value):
     state_mutex.acquire()
     global state
-    global match_index
+    global my_match_index
 
     if state_var == TERM:
         if state[state_var] != new_value:
@@ -406,14 +406,14 @@ def update_state(state_var, new_value):
             log.append(new_value)
 
         # appending value to follower
-        elif len(log) <= match_index:
+        elif len(log) <= my_match_index:
             print("STATE log[" + str(len(log)) + "]=" + str(new_value)) 
             log.append(new_value)
 
         # overwriting value to follower
-        elif log[match_index] != new_value:
-            print("STATE log[" + str(match_index) + "]=" + str(new_value)) 
-            log[match_index] = new_value
+        elif log[my_match_index] != new_value:
+            print("STATE log[" + str(my_match_index) + "]=" + str(new_value)) 
+            log[my_match_index] = new_value
 
         state[LOG] = log
 
