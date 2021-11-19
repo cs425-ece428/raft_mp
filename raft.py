@@ -33,8 +33,10 @@ state = {
     COMMIT_INDEX : 0,
 }
 
+match_index = 0
+peer_state = []
+
 current_votes = 0
-uncommited_log = []
 
 my_id = int(sys.argv[1])
 n = int(sys.argv[2])
@@ -137,6 +139,7 @@ def parse_message(message: str):
 
 
 def handle_request_vote(message_term: int, sender_id: str):
+    # TODO: add the voting conditions
     if message_term > get_state(TERM):
         # only vote if have not voted for this term 
         # (only higher terms, no need for lower terms b/c irrelevant)
@@ -161,6 +164,12 @@ def handle_vote(message_term: int, decision: str):
             # become leader since we got majority of votes
             update_state(STATE, L) # change state to leader
             update_state(LEADER, my_id) # set leader to itself
+            for i in range(1, n):
+                peer_state.append({
+                    next_index: len(get_state(LOG) + 1),
+                    match_index: 0
+                })
+                    
 
             # let other processes know we are the leader
             # send_message_to_all(HEARTBEAT)
@@ -168,28 +177,53 @@ def handle_vote(message_term: int, decision: str):
 
 
 
-def handle_heartbeat(message_term: int, sender_id: str, log_message: str):
+def handle_appendentries(
+    message_term: int, 
+    sender_id: str, 
+    prev_log_term: int, 
+    prev_log_index: int, 
+    log_message: str,
+    commit_index: int,
+    ):
     if (get_state(STATE) != L and message_term == get_state(TERM)) or message_term > get_state(TERM):
         update_state(STATE, F) # make itself follower if not already set
         update_state(TERM, message_term) # update term to whatever was sent in message 
         update_state(LEADER, sender_id) # make sender the leader if not already set
-        write(APPEND_ENTRIES_RESPONSE, sender_id, log_message)    
 
-def handle_heartbeat_response(message_term: int, sender_id: str):
+        if log_message is not "":
+            # TODO: calculate success by checking if prev log term and index is in our logs
+            success = False
+
+            if success:
+                # TODO: add/overwrite the entry to our logs
+                # TODO: update the STATE of logs
+                # TODO: increment the match index
+                # TODO: increment our commit index as long as our match index < leader's commit index
+
+        write(APPEND_ENTRIES_RESPONSE, sender_id, success)    
+
+def handle_appendentries_response(
+    message_term: int, 
+    sender_id: str, 
+    success: bool, 
+    match_index: int
+    ):
     if get_state(STATE) == L:
+        # TODO: Check success 
+        # If not, decrement prev log index and prev log term and send appenentry again
+        # TODO: If success is true, check the match index, 
+        # If not equal to leader's prev index, send an appendentry with the next log
+        # TODO: If success is true, check if we can commit anything
+        # TODO: If we can, commit a message and send an Append entry to all with an updated commit index
         pass
-
-        #need to keep track of responses from followers
-        #majority responses will tell it to commit message
-
 
 
 def handle_log(log_message):
+    # only leader should get log
     if get_state(STATE) == L:
-        #only leader should get log
+        # TODO: update the state of logs
         send_message_to_all(APPEND_ENTRIES, log_message)
-        
-
+        pass
 
 
 def reader(message: str):
@@ -220,13 +254,13 @@ def reader(message: str):
         handle_vote(message_term, decision)
 
     if action == "AppendEntries":
-        # print ("received a heartbeat")
+        # print ("received a appendentries")
         log_message = args.split(" ")[-2] 
-        handle_heartbeat(message_term, sender_id, log_message)
+        handle_appendentries(message_term, sender_id, log_message)
 
     if action == "AppendEntriesResponse":
-        # print ("received a heartbeat")
-        handle_heartbeat_response(message_term, sender_id)
+        # print ("received a appendentries response")
+        handle_appendentries_response(message_term, sender_id)
 
 
 
