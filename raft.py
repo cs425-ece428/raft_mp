@@ -224,11 +224,11 @@ def handle_appendentries(
             if success:
                 # add/overwrite the entry to our logs
                 new_entry = (message_term, log_message) # will add this tuple to logs (term, log_message)
+                # increment the match index
+                match_index += 1
                 # update the STATE of logs
                 update_state(LOG, new_entry)
                 # TODO: update the update_state function for LOG
-                # increment the match index
-                match_index += 1
                 # increment our commit index as long as our match index < leader's commit index
                 if match_index <= commit_index:
                     update_state(COMMIT_INDEX, match_index)
@@ -321,18 +321,61 @@ def get_state(state_var):
 def update_state(state_var, new_value):
     state_mutex.acquire()
     global state
-    if state[state_var] != new_value:
-        if state_var == TERM:
+    global match_index
+
+    if state_var == TERM:
+        if state[state_var] != new_value:
             state[LEADER] = "null"
             print("STATE " + print_dict[LEADER] + "=null")
-        state[state_var] = new_value
-        print("STATE " + print_dict[state_var] + "=" + str(new_value))
+            state[state_var] = new_value
+            print("STATE " + print_dict[state_var] + "=" + str(new_value))
 
-    # if state_var == 4:
-    #     #log  
-    #     if log != new_value:
-    #         print("STATE log[" + commit_index + "]=" + new_value) #not sure if index should be commit index, but I think so
-    #         state["log"] = new_value
+
+    elif state_var == STATE:
+        if state[state_var] != new_value:
+            state[state_var] = new_value
+            print("STATE " + print_dict[state_var] + "=" + str(new_value))
+
+    elif state_var == LEADER:
+        if state[state_var] != new_value:
+            state[state_var] = new_value
+            print("STATE " + print_dict[state_var] + "=" + str(new_value))
+    
+
+    elif state_var == LOG:
+        log = state[LOG]
+
+        # appending value to leader's log
+        if state[STATE] == L:
+            log.append(new_value)
+            print("STATE log[" + str(len(log)-1) + "]=" + new_value) 
+
+        # appending value to follower
+        elif len(log) >= match_index:
+            print("STATE log[" + match_index + "]=" + new_value) 
+            log.append(new_value)
+
+        # overwriting value to follower
+        elif log[match_index] != new_value:
+            print("STATE log[" + match_index + "]=" + new_value) 
+            log[match_index] = new_value
+
+        state[LOG] = log
+
+
+    elif state_var == COMMIT_INDEX:
+        if state[state_var] != new_value:
+            # If leader, need to print COMMITED
+            if state[STATE] == L:
+                for i in range(state[state_var]+1, new_value+1):
+                    # print "COMMITTED <string> k"
+                    print("COMMITED " + state[LOG][i][1] + " " + str(i))
+
+            state[state_var] = new_value
+            print("STATE " + print_dict[state_var] + "=" + str(new_value))  
+            
+
+    
 
     state_mutex.release()
 
