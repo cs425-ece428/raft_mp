@@ -125,7 +125,7 @@ def start_election():
     last_log_index = len(logs) - 1
     last_log_term = logs[-1][0]
     message = str(last_log_index) + " " + str(last_log_term)
-    send_message_to_all(REQUEST_VOTE, message)
+    send_message_to_all(REQUEST_VOTE)
 
 
 def send_message_to_all(message_type, msg = ""):
@@ -164,8 +164,8 @@ def check_and_commit():
 
 
 def handle_request_vote(
-    message_term: int, 
     sender_id: int, 
+    message_term: int, 
     candidate_last_log_index: int, 
     candidate_last_log_term: int
     ):
@@ -190,7 +190,10 @@ def handle_request_vote(
         write(VOTE, sender_id, "False")
 
 
-def handle_vote(message_term: int, decision: str):
+def handle_vote(
+    message_term: int, 
+    decision: str
+    ):
     # if somehow state changed from candidate to follower/leader in between sending/receiving, ignore the vote
     if get_state(STATE) == C and decision == "True" and get_state(TERM) == message_term:
 
@@ -218,12 +221,12 @@ def handle_vote(message_term: int, decision: str):
 
 
 def handle_appendentries(
-    message_term: int, 
     sender_id: str, 
+    message_term: int, 
     prev_log_term: int, 
     prev_log_index: int, 
-    log_message: str,
     commit_index: int,
+    log_message: str,
     ):
     global match_index
     if (get_state(STATE) != L and message_term == get_state(TERM)) or message_term > get_state(TERM):
@@ -254,8 +257,8 @@ def handle_appendentries(
         write(APPEND_ENTRIES_RESPONSE, sender_id, success)    
 
 def handle_appendentries_response(
-    message_term: int, 
     sender_id: int, 
+    message_term: int, 
     success: bool, 
     match_index: int
     ):
@@ -274,7 +277,7 @@ def handle_appendentries_response(
             write(APPEND_ENTRIES, sender_id)
 
 
-def handle_log(log_message):
+def handle_log(log_message : str):
     # only leader should get log
     if get_state(STATE) == L:
         # TODO: update the state of logs
@@ -294,7 +297,6 @@ def reader(message: str):
         handle_log(log_message)
         return
 
-
     sender_id, action, args = parse_message(message)
     message_term = args.split(" ")[-1]
     if message_term:
@@ -302,6 +304,7 @@ def reader(message: str):
 
     if action == "RequestVote":
         # print("received request vote")
+
         handle_request_vote(message_term, sender_id)
 
     if action == "Vote":
