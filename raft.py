@@ -276,8 +276,8 @@ def handle_appendentries_response(
 def handle_log(log_message : str):
     # only leader should get log
     if get_state(STATE) == L:
-        # TODO: update the state of logs
-        send_message_to_all(APPEND_ENTRIES, log_message)
+        update_state(LOG, log_message)
+        send_message_to_all(APPEND_ENTRIES)
         pass
 
 
