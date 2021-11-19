@@ -33,7 +33,7 @@ state = {
     COMMIT_INDEX : 0,
 }
 
-our_match_index = 0
+my_match_index = 0
 peer_state = []
 
 current_votes = 0
@@ -121,10 +121,6 @@ def start_election():
         return
 
     # send request vote to all
-    logs = get_state(logs)
-    last_log_index = len(logs) - 1
-    last_log_term = logs[-1][0]
-    message = str(last_log_index) + " " + str(last_log_term)
     send_message_to_all(REQUEST_VOTE)
 
 
@@ -221,14 +217,14 @@ def handle_vote(
 
 
 def handle_appendentries(
-    sender_id: str, 
+    sender_id: int, 
     message_term: int, 
-    prev_log_term: int, 
     prev_log_index: int, 
+    prev_log_term: int, 
     commit_index: int,
     log_message: str,
     ):
-    global match_index
+    global my_match_index
     if (get_state(STATE) != L and message_term == get_state(TERM)) or message_term > get_state(TERM):
         update_state(STATE, F) # make itself follower if not already set
         update_state(TERM, message_term) # update term to whatever was sent in message 
@@ -246,13 +242,13 @@ def handle_appendentries(
                 # add/overwrite the entry to our logs
                 new_entry = (message_term, log_message) # will add this tuple to logs (term, log_message)
                 # increment the match index
-                match_index += 1
+                my_match_index = prev_log_index + 1
                 # update the STATE of logs
                 update_state(LOG, new_entry)
                 # TODO: update the update_state function for LOG
                 # increment our commit index as long as our match index < leader's commit index
-                if match_index <= commit_index:
-                    update_state(COMMIT_INDEX, match_index)
+                if my_match_index <= commit_index:
+                    update_state(COMMIT_INDEX, my_match_index)
 
         write(APPEND_ENTRIES_RESPONSE, sender_id, success)    
 
@@ -333,14 +329,36 @@ def reader(message: str):
 
 
 def write(request_type, receiver_id, msg = ""):
+    logs = get_state(logs)
+    term = str(get_state(TERM))
+    
     if request_type == REQUEST_VOTE:
-        print("SEND " + str(receiver_id) + " RequestVote " + str(msg) + " " + str(get_state(TERM)))
+        last_log_index = len(logs) - 1
+        last_log_term = logs[-1][0]
+        print("SEND " + str(receiver_id) + " RequestVote " 
+            + term + " " 
+            + str(last_log_index) + " " 
+            + str(last_log_term)
+        )
     if request_type == VOTE:
-        print("SEND " + str(receiver_id) + " Vote " + str(msg) + " " + str(get_state(TERM)))
+        print("SEND " + str(receiver_id) + " Vote " + term)
     if request_type == APPEND_ENTRIES:
-        print("SEND " + str(receiver_id) + " AppendEntries " + str(get_state(COMMIT_INDEX)) + " " + str(msg) + " " + str(get_state(TERM)))
+        prev_log_index = peer_state[receiver_id]["next_index"] - 1
+        prev_log_term = logs[prev_log_index][0]
+        log_message = logs[prev_log_index + 1][1] if prev_log_index + 1 < len(logs) else ""
+        print("SEND " + str(receiver_id) + " AppendEntries " 
+            + term + " " 
+            + str(prev_log_index) + " "
+            + str(prev_log_term) + " "
+            + str(get_state(COMMIT_INDEX)) + " "
+            + log_message
+        )
     if request_type == APPEND_ENTRIES_RESPONSE:
-        print("SEND " + str(receiver_id) + " AppendEntriesResponse " + str(get_state(COMMIT_INDEX)) + " " + str(msg) + " " + str(get_state(TERM)))
+        print("SEND " + str(receiver_id) + " AppendEntriesResponse " + 
+            str(term + " " + 
+            str(msg) + " " + 
+            str(my_match_index)
+        )
 
 def get_state(state_var):
     state_mutex.acquire()
@@ -402,10 +420,7 @@ def update_state(state_var, new_value):
                     print("COMMITED " + state[LOG][i][1] + " " + str(i))
 
             state[state_var] = new_value
-            print("STATE " + print_dict[state_var] + "=" + str(new_value))  
-            
-
-    
+            print("STATE " + print_dict[state_var] + "=" + str(new_value))      
 
     state_mutex.release()
 
