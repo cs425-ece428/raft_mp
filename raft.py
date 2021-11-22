@@ -48,7 +48,7 @@ import random
 from _thread import *
 import threading
 
-ELECTION_START_TIMEOUT = (0.25 + my_id*5 + random.random()/10)
+ELECTION_START_TIMEOUT = (.5 + my_id*5 + random.random()/10)
 HEARTBEAT_TIMEOUT = 0.5
 
 last_heard_time_mutex = threading.Lock()
@@ -230,6 +230,7 @@ def handle_appendentries(
     prev_log_term: int, 
     commit_index: int,
     log_message: str,
+    log_message_term: int
     ):
     global my_match_index
     if (get_state(STATE) != L and message_term == get_state(TERM)) or message_term > get_state(TERM):
@@ -241,6 +242,15 @@ def handle_appendentries(
         if log_message is not "":
             # calculate success by checking if prev log term and index is in our logs
             local_log = get_state(LOG)
+            # if my_id == 0:
+            #     print('DEBUGGING')
+            #     print(local_log)
+            #     print(prev_log_index)
+            #     print(prev_log_term)
+            #     print(commit_index)
+            #     print(get_state(COMMIT_INDEX))
+            #     print(my_match_index)
+
             if len(local_log) > prev_log_index and local_log[prev_log_index][0] == prev_log_term:
                 success = True
             else:
@@ -251,7 +261,8 @@ def handle_appendentries(
                 # increment the match index
                 my_match_index = prev_log_index + 1
                 # update the STATE of logs
-                update_state(LOG, log_message)
+                log_entry = [log_message_term, log_message]
+                update_state(LOG, log_message, log_message_term)
                 # TODO: update the update_state function for LOG
                 # increment our commit index as long as our match index < leader's commit index
                 if my_match_index <= commit_index:
@@ -291,11 +302,16 @@ def handle_heartbeat(
     message_term: int 
     ):
 
-    if (get_state(STATE) != L and message_term == get_state(TERM)) or message_term > get_state(TERM):
+    if (get_state(STATE) != L and message_term == get_state(TERM)):
         update_state(STATE, F) # make itself follower if not already set
         update_state(TERM, message_term) # update term to whatever was sent in message 
         update_state(LEADER, sender_id) # make sender the leader if not already set
-        write(HEARTBEAT, sender_id)        
+        write(HEARTBEAT, sender_id)   
+    elif message_term > get_state(TERM):
+        update_state(STATE, F) # make itself follower if not already set
+        update_state(TERM, message_term) # update term to whatever was sent in message 
+        update_state(LEADER, sender_id) # make sender the leader if not already set
+        write(APPEND_ENTRIES_RESPONSE, sender_id, "0")     
 
 
 
@@ -304,6 +320,8 @@ def handle_log(log_message : str):
     global peer_state
 
     if get_state(STATE) == L:
+        log_entry = [get_state(TERM), log_message]
+
         update_state(LOG, log_message)
         logs = get_state(LOG)
         peer_state[my_id]["match_index"] = len(logs) - 1
@@ -342,14 +360,16 @@ def reader(message: str):
 
     if action == "AppendEntries":
         # print ("received a appendentries")
-        if len(args_split) == 5:
-            message_term, prev_log_index, prev_log_term, commit_index = map(int, args_split[:-1])
-            log_message = args_split[-1]
+        if len(args_split) == 6:
+            message_term, prev_log_index, prev_log_term, commit_index = map(int, args_split[:-2])
+            log_message, log_message_term = args_split[-2:]
+            log_message_term = int(log_message_term)
         else:
             message_term, prev_log_index, prev_log_term, commit_index = map(int, args_split)
             log_message = ""
+            log_message_term = -1
  
-        handle_appendentries(sender_id, message_term, prev_log_index, prev_log_term, commit_index, log_message)
+        handle_appendentries(sender_id, message_term, prev_log_index, prev_log_term, commit_index, log_message, log_message_term)
 
     if action == "AppendEntriesResponse":
         # print ("received a appendentries response")
@@ -386,12 +406,14 @@ def write(request_type, receiver_id, msg = ""):
         prev_log_index = max(peer_state[receiver_id]["next_index"] - 1, 0)
         prev_log_term = logs[prev_log_index][0]
         log_message = logs[prev_log_index + 1][1] if prev_log_index + 1 < len(logs) else ""
+        log_message_term = logs[prev_log_index + 1][0] if prev_log_index + 1 < len(logs) else ""
         print("SEND " + str(receiver_id) + " AppendEntries " 
             + term + " " 
             + str(prev_log_index) + " "
             + str(prev_log_term) + " "
             + str(get_state(COMMIT_INDEX)) + " "
-            + log_message
+            + log_message + " "
+            + str(log_message_term)
         )
     if request_type == APPEND_ENTRIES_RESPONSE:
         print("SEND " + str(receiver_id) + " AppendEntriesResponse " + 
@@ -411,7 +433,7 @@ def get_state(state_var):
     state_mutex.release()
     return state_var_value
 
-def update_state(state_var, new_value):
+def update_state(state_var, new_value, value_term = -1):
     state_mutex.acquire()
     global state
     global my_match_index
@@ -437,7 +459,12 @@ def update_state(state_var, new_value):
 
     elif state_var == LOG:
         log = state[LOG]
-        new_value = [state[TERM], new_value]
+        if value_term == -1:
+
+            new_value = [state[TERM], new_value]
+        else:
+            new_value = [value_term, new_value]
+        
 
 
         # appending value to leader's log
@@ -446,13 +473,13 @@ def update_state(state_var, new_value):
             log.append(new_value)
 
         # appending value to follower
-        elif len(log) <= my_match_index:
+        elif len(log) == my_match_index:
             print("STATE log[" + str(len(log)) + "]=[" + str(new_value[0]) + ", \"" + new_value[1] + "\"]") 
             log.append(new_value)
 
         # overwriting value to follower
         elif log[my_match_index] != new_value:
-            print("STATE log[" + str(len(log)) + "]=[" + str(new_value[0]) + ", \"" + new_value[1] + "\"]")  
+            print("STATE log[" + str(my_match_index) + "]=[" + str(new_value[0]) + ", \"" + new_value[1] + "\"]")  
             log[my_match_index] = new_value
 
         state[LOG] = log
